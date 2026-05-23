@@ -6,7 +6,7 @@ ChatGPT 공유 대화에서 논의한 것처럼 Python으로 간단한 에이전
 
 추가로 clarified된 장기 목표는 단순한 `질문 -> 후보 생성 -> 평가 -> 최고 답변 선택` 구조가 아니다. 사용자가 원하는 방향은 Hermes류의 self-improvement에 더 가깝다. 즉, 에이전트를 계속 사용하면서 실행 기록, 실패, 성공, 사용자 피드백을 축적하고, 그 데이터를 바탕으로 에이전트의 정책, 스킬, 메모리 운용, 도구 선택, 프롬프트 전략이 점진적으로 진화하는 구조다. 이 진화를 무작정 수행하지 않고, 수학적으로 정의한 목적함수/최적점 쪽으로 신경망 기반 value/reward/policy 모델을 이용해 유도하는 것이 핵심 의도다.
 
-2026-05-24 추가 목표는 OpenClaw/Hermes처럼 "말만 하는 에이전트"가 아니라 실제 로컬 작업을 수행하는 도구 기반 에이전트로 발전시키는 것이다. 오늘의 실행 결과물은 사진 폴더 연도별 정리와 Microsoft Paint에서 Apple-style 로고 및 수박 그림 열기다.
+2026-05-24 추가 목표는 OpenClaw/Hermes처럼 "말만 하는 에이전트"가 아니라 실제 로컬 작업을 수행하는 도구 기반 에이전트로 발전시키는 것이다. 오늘의 실행 결과물은 사진 폴더 연도별 정리와 Microsoft Paint에서 Apple-style 로고, 수박, 바나나 그림 열기다.
 
 ## 구현 상태
 
@@ -27,8 +27,9 @@ ChatGPT 공유 대화에서 논의한 것처럼 Python으로 간단한 에이전
 - `agent_tools.py`를 추가했다.
   - `organize_pictures_by_year`: 이미지 파일을 EXIF 날짜 또는 파일 수정 시간 기준으로 연도별 폴더에 이동/복사한다.
   - `undo_photo_organization`: 사진 정리 manifest를 기반으로 이동 작업을 되돌린다.
-  - `draw_in_paint`: 설명 기반 이미지를 생성하고 Microsoft Paint에서 연다. 현재 렌더러는 Apple-style 로고와 수박 요청을 지원한다.
+  - `draw_in_paint`: 설명 기반 이미지를 생성하고 Microsoft Paint에서 연다. 현재 렌더러는 Apple-style 로고, 수박, 바나나 요청을 지원한다.
   - 그림판 기능은 요청마다 `paint_logo`, `paint_watermelon` 같은 agent tool을 늘리는 방식이 아니라, 하나의 `draw_in_paint` 도구 안에서 렌더러를 선택하는 방식으로 유지한다.
+  - 미지원 그림 요청의 fallback은 한글 프롬프트 텍스트를 이미지에 직접 쓰지 않는다. Pillow 기본 폰트가 한글을 깨진 텍스트처럼 렌더링할 수 있어서, 중립 placeholder 이미지로 바꿨다.
 - `trace_store.py`를 추가했다.
   - SQLite `agent_runs/agent.db`에 실행 입력, provider, model, 결과, 상태를 저장한다.
 - `main.py`에 새 도구를 연결했다.
@@ -40,6 +41,13 @@ ChatGPT 공유 대화에서 논의한 것처럼 Python으로 간단한 에이전
 - `scripts/verify_local_tools.py`를 추가했다.
   - LLM 호출 없이 사진 정리/되돌리기, Apple-style 로고 렌더링, 수박 렌더링, trace 저장을 검증한다.
 - `trace_store.py`에서 SQLite 연결을 명시적으로 닫도록 고쳤다. Windows에서 임시 DB 검증 시 파일 잠금이 남는 문제를 막기 위해서다.
+
+## 현재 권한 모델
+
+- 이 프로젝트에는 아직 OpenClaw식 Gateway 권한 계층이 없다.
+- 로컬 도구는 `main.py`를 실행한 Windows 사용자 계정의 권한으로 동작한다.
+- 사진 정리는 별도 관리자 권한을 얻은 것이 아니라, Python 프로세스가 현재 사용자가 접근 가능한 폴더에서 `shutil.move`를 실행한 것이다.
+- 외부 채널/웹훅/상시 실행으로 확장하기 전에는 allowlist, 승인 프롬프트, dry-run, 감사 로그, 위험 경로 차단 같은 권한 계층이 필요하다.
 
 ## OpenClaw/Hermes 방향 점검
 
@@ -78,6 +86,8 @@ ChatGPT 공유 대화에서 논의한 것처럼 Python으로 간단한 에이전
   - `agent_runs/paint/drawing.png` 생성 확인
   - `mspaint` 프로세스 확인: `drawing - 그림판`
   - 생성된 수박 이미지 픽셀 검사: red_pixels=51576, green_pixels=183217
+  - `main.py "그림판 열어서 바나나 그려줘"` 실행 성공
+  - 생성된 바나나 이미지 픽셀 검사: yellow_pixels=61239, brown_pixels=20727
   - 테스트 사진 폴더 프롬프트 실행 성공: 2021/2025 이미지가 각각 `ByYear\2021`, `ByYear\2025`로 이동됨
   - `agent_runs/agent.db`에 실행 trace 저장 확인
 
@@ -125,6 +135,12 @@ C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판에서 애
 
 ```powershell
 C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 수박 그려줘"
+```
+
+바나나 그림판 실행:
+
+```powershell
+C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 바나나 그려줘"
 ```
 
 로컬 도구 검증:

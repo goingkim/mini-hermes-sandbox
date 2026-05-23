@@ -142,7 +142,7 @@ def draw_in_paint(description: str, save_path: str = "", open_paint: bool = True
     """Create a simple image from a description and open it in Microsoft Paint.
 
     This is a generic Paint tool. It selects a renderer by description and falls
-    back to a simple text image for unsupported drawing requests. Leave
+    back to a neutral placeholder for unsupported drawing requests. Leave
     open_paint=True unless the caller explicitly wants file generation only.
     """
     output_path = (
@@ -226,22 +226,26 @@ def _create_simple_drawing_png(description: str, output_path: Path) -> None:
             renderer(output_path)
             return
 
-    _create_text_placeholder_png(description, output_path)
+    _create_generic_placeholder_png(output_path)
 
 
 def _drawing_renderers() -> tuple[tuple[tuple[str, ...], Callable[[Path], None]], ...]:
     return (
         (("apple", "애플"), _create_apple_style_logo_png),
         (("watermelon", "수박"), _create_watermelon_png),
+        (("banana", "바나나"), _create_banana_png),
     )
 
 
-def _create_text_placeholder_png(description: str, output_path: Path) -> None:
+def _create_generic_placeholder_png(output_path: Path) -> None:
     size = 800
-    image = Image.new("RGB", (size, size), (255, 255, 255))
+    image = Image.new("RGB", (size, size), (250, 252, 248))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((80, 80, 720, 720), outline=(30, 30, 30), width=6)
-    draw.text((120, 360), description[:80], fill=(20, 20, 20))
+    draw.rectangle((90, 90, 710, 710), outline=(60, 68, 76), width=6)
+    draw.line((180, 500, 310, 350, 440, 430, 620, 260), fill=(90, 132, 180), width=24)
+    draw.line((180, 505, 310, 355, 440, 435, 620, 265), fill=(180, 210, 236), width=10)
+    draw.ellipse((145, 470, 215, 540), fill=(245, 185, 70), outline=(80, 65, 45), width=4)
+    draw.polygon([(610, 245), (660, 230), (635, 285)], fill=(80, 65, 45))
     image.save(output_path)
 
 
@@ -303,5 +307,45 @@ def _create_watermelon_png(output_path: Path) -> None:
         (505, 530),
     ):
         draw.ellipse((x - 12, y - 20, x + 12, y + 20), fill=seed_color)
+
+    image.save(output_path)
+
+
+def _create_banana_png(output_path: Path) -> None:
+    size = 800
+    image = Image.new("RGB", (size, size), (250, 252, 248))
+    draw = ImageDraw.Draw(image)
+
+    outer_curve = [
+        (120, 390),
+        (190, 505),
+        (320, 610),
+        (500, 625),
+        (675, 500),
+    ]
+    inner_curve = [
+        (185, 355),
+        (280, 435),
+        (405, 500),
+        (545, 480),
+        (660, 395),
+    ]
+
+    draw.line(outer_curve, fill=(102, 68, 23), width=122, joint="curve")
+    draw.line(outer_curve, fill=(246, 198, 48), width=104, joint="curve")
+    draw.line(inner_curve, fill=(250, 252, 248), width=92, joint="curve")
+
+    draw.line(outer_curve, fill=(255, 223, 83), width=42, joint="curve")
+    draw.line(
+        [(160, 410), (245, 505), (360, 565), (510, 570), (635, 485)],
+        fill=(255, 238, 128),
+        width=12,
+        joint="curve",
+    )
+
+    draw.ellipse((78, 342, 160, 430), fill=(96, 60, 20))
+    draw.ellipse((642, 450, 720, 535), fill=(98, 64, 24))
+    draw.ellipse((105, 360, 145, 405), fill=(155, 96, 30))
+    draw.ellipse((657, 466, 698, 510), fill=(150, 92, 28))
 
     image.save(output_path)

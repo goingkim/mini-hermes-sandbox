@@ -72,16 +72,19 @@ def _verify_drawing_renderers() -> None:
         output_dir = Path(tmp)
         apple = output_dir / "apple.png"
         watermelon = output_dir / "watermelon.png"
+        banana = output_dir / "banana.png"
         fallback = output_dir / "fallback.png"
 
         _create_simple_drawing_png("애플로고", apple)
         _create_simple_drawing_png("수박", watermelon)
-        _create_simple_drawing_png("unknown shape", fallback)
+        _create_simple_drawing_png("바나나", banana)
+        _create_simple_drawing_png("코끼리 그려줘", fallback)
 
         _assert(_count_pixels(apple, lambda r, g, b: r < 40 and g < 40 and b < 40) > 20_000, "apple render missing dark logo")
         _assert(_count_pixels(watermelon, lambda r, g, b: r > 180 and g < 90 and b < 90) > 10_000, "watermelon render missing red flesh")
         _assert(_count_pixels(watermelon, lambda r, g, b: g > 90 and r < 100 and b < 120) > 20_000, "watermelon render missing green rind")
-        _assert(fallback.stat().st_size > 1_000, "fallback drawing file too small")
+        _assert(_count_pixels(banana, lambda r, g, b: r > 220 and g > 160 and b < 100) > 20_000, "banana render missing yellow body")
+        _assert(_count_pixels(fallback, lambda r, g, b: (r, g, b) != (250, 252, 248)) > 5_000, "fallback drawing missing placeholder marks")
 
 
 def _verify_trace_store() -> None:

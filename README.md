@@ -74,6 +74,10 @@ C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판에서 애
 C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 수박 그려줘"
 ```
 
+```powershell
+C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 바나나 그려줘"
+```
+
 사진 정리 도구는 기본적으로 `~/Pictures/ByYear/YYYY` 아래로 이미지를 이동합니다. 실행 후 `agent_runs/manifests/`에 manifest를 저장하므로, 필요하면 `undo_photo_organization` 도구로 되돌릴 수 있습니다.
 
 로컬 도구만 빠르게 검증하려면 아래 명령을 실행합니다.
@@ -97,7 +101,13 @@ C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe scripts\verify_local_tools.p
 - `get_current_time`: IANA timezone 기준 현재 시간 도구
 - `organize_pictures_by_year`: 사진/이미지를 연도별 폴더로 정리
 - `undo_photo_organization`: manifest 기반 사진 정리 되돌리기
-- `draw_in_paint`: 설명을 바탕으로 간단한 이미지를 만들고 Microsoft Paint에서 열기. 현재 Apple-style 로고와 수박 렌더러를 지원하고, 미지원 요청은 텍스트 이미지로 fallback한다.
+- `draw_in_paint`: 설명을 바탕으로 간단한 이미지를 만들고 Microsoft Paint에서 열기. 현재 Apple-style 로고, 수박, 바나나 렌더러를 지원하고, 미지원 요청은 깨진 텍스트 대신 중립 placeholder 이미지로 fallback한다.
+
+## 권한 모델
+
+현재 이 프로젝트에는 OpenClaw식 Gateway 권한 계층이 없습니다. 로컬 도구는 `main.py`를 실행한 Windows 사용자 계정의 파일 권한으로 동작합니다. 따라서 사진 정리도 별도 관리자 권한을 얻은 것이 아니라, 현재 사용자가 접근 가능한 폴더에서 Python 프로세스가 `shutil.move`를 실행한 것입니다.
+
+외부 메신저, 웹훅, 원격 실행으로 확장하기 전에는 allowlist, 승인 프롬프트, dry-run, 감사 로그, 위험 경로 차단 같은 Gateway/permission 계층을 추가해야 합니다.
 
 ## 실행 기록
 
