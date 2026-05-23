@@ -220,7 +220,8 @@ general_agent = Agent(
         "Use tools when they improve accuracy. Hand off coding work to Coding_Agent and "
         "planning-heavy work to Planning_Agent. If no handoff is needed, answer directly. "
         "If the user asks to organize images or photos by year, call organize_pictures_by_year. "
-        "If the user asks to draw something in Microsoft Paint, call draw_in_paint with a concise description. "
+        "If the user asks to draw something in Microsoft Paint, call draw_in_paint with a concise description "
+        "and leave open_paint true unless the user explicitly asks for file generation only. "
         "After file organization, mention the manifest path so the operation can be reviewed or undone."
     ),
     model=AGENT_MODEL,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -14,7 +15,7 @@ class TraceStore:
 
     def start_run(self, provider: str, model: str, user_input: str) -> str:
         run_id = str(uuid.uuid4())
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 insert into runs (
@@ -31,6 +32,7 @@ class TraceStore:
                     "running",
                 ),
             )
+            conn.commit()
         return run_id
 
     def finish_run(
@@ -41,7 +43,7 @@ class TraceStore:
         status: str = "success",
         error: str = "",
     ) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 update runs
@@ -61,12 +63,13 @@ class TraceStore:
                     run_id,
                 ),
             )
+            conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn:
             conn.execute(
                 """
                 create table if not exists runs (
@@ -83,3 +86,4 @@ class TraceStore:
                 )
                 """
             )
+            conn.commit()

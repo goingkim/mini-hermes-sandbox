@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from PIL import Image, ImageDraw
 
@@ -138,11 +138,12 @@ def undo_photo_organization(manifest_path: str) -> str:
     return f"Restored {restored} image(s); skipped {skipped}. Manifest: {manifest_file.resolve()}"
 
 
-def draw_in_paint(description: str, save_path: str = "") -> str:
+def draw_in_paint(description: str, save_path: str = "", open_paint: bool = True) -> str:
     """Create a simple image from a description and open it in Microsoft Paint.
 
-    This is a generic Paint tool. The first renderer supports Apple-style logo
-    requests and falls back to a simple text image for other descriptions.
+    This is a generic Paint tool. It selects a renderer by description and falls
+    back to a simple text image for unsupported drawing requests. Leave
+    open_paint=True unless the caller explicitly wants file generation only.
     """
     output_path = (
         Path(save_path).expanduser()
@@ -152,8 +153,11 @@ def draw_in_paint(description: str, save_path: str = "") -> str:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     _create_simple_drawing_png(description, output_path)
 
-    subprocess.Popen(["mspaint.exe", str(output_path.resolve())])
-    return f"Opened Microsoft Paint with generated image: {output_path.resolve()}"
+    if open_paint:
+        subprocess.Popen(["mspaint.exe", str(output_path.resolve())])
+        return f"Opened Microsoft Paint with generated image: {output_path.resolve()}"
+
+    return f"Generated image without opening Paint: {output_path.resolve()}"
 
 
 def _iter_image_files(source: Path, destination_root: Path, recursive: bool) -> list[Path]:
@@ -217,10 +221,22 @@ def _unique_path(path: Path) -> Path:
 
 def _create_simple_drawing_png(description: str, output_path: Path) -> None:
     normalized = description.lower()
-    if "apple" in normalized or "애플" in normalized:
-        _create_apple_style_logo_png(output_path)
-        return
+    for keywords, renderer in _drawing_renderers():
+        if any(keyword in normalized for keyword in keywords):
+            renderer(output_path)
+            return
 
+    _create_text_placeholder_png(description, output_path)
+
+
+def _drawing_renderers() -> tuple[tuple[tuple[str, ...], Callable[[Path], None]], ...]:
+    return (
+        (("apple", "애플"), _create_apple_style_logo_png),
+        (("watermelon", "수박"), _create_watermelon_png),
+    )
+
+
+def _create_text_placeholder_png(description: str, output_path: Path) -> None:
     size = 800
     image = Image.new("RGB", (size, size), (255, 255, 255))
     draw = ImageDraw.Draw(image)
@@ -255,3 +271,37 @@ def _create_apple_style_logo_png(output_path: Path) -> None:
     image.alpha_composite(leaf, (405, 75))
 
     image.convert("RGB").save(output_path)
+
+
+def _create_watermelon_png(output_path: Path) -> None:
+    size = 800
+    image = Image.new("RGB", (size, size), (250, 252, 248))
+    draw = ImageDraw.Draw(image)
+
+    draw.ellipse((110, 130, 690, 710), fill=(38, 143, 72), outline=(18, 78, 42), width=8)
+    stripe_color = (17, 100, 52)
+    for bbox in (
+        (135, 150, 385, 700),
+        (245, 140, 555, 710),
+        (415, 150, 665, 700),
+    ):
+        draw.arc(bbox, 70, 290, fill=stripe_color, width=18)
+
+    rind_points = [(175, 620), (625, 620), (400, 255)]
+    flesh_points = [(210, 590), (590, 590), (400, 300)]
+    draw.polygon(rind_points, fill=(32, 129, 64))
+    draw.line((175, 620, 625, 620), fill=(16, 82, 41), width=42)
+    draw.line((195, 596, 605, 596), fill=(172, 220, 96), width=16)
+    draw.polygon(flesh_points, fill=(224, 48, 55))
+
+    seed_color = (31, 27, 24)
+    for x, y in (
+        (345, 455),
+        (455, 455),
+        (300, 530),
+        (405, 520),
+        (505, 530),
+    ):
+        draw.ellipse((x - 12, y - 20, x + 12, y + 20), fill=seed_color)
+
+    image.save(output_path)
