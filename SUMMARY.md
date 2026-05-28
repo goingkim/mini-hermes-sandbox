@@ -1,158 +1,846 @@
-# 작업 요약
+# Agent 프로젝트 구조 요약
 
-## 현재 목표
+## 한 줄 요약
 
-ChatGPT 공유 대화에서 논의한 것처럼 Python으로 간단한 에이전트 CLI를 구현하고, DeepSeek API 토큰으로 실행 가능한지 확인한다.
+이 프로젝트는 `mini_hermes`를 중심으로 한 연구용 에이전트 프로젝트다. 현재 구조는 크게 네 부분으로 나뉜다.
 
-추가로 clarified된 장기 목표는 단순한 `질문 -> 후보 생성 -> 평가 -> 최고 답변 선택` 구조가 아니다. 사용자가 원하는 방향은 Hermes류의 self-improvement에 더 가깝다. 즉, 에이전트를 계속 사용하면서 실행 기록, 실패, 성공, 사용자 피드백을 축적하고, 그 데이터를 바탕으로 에이전트의 정책, 스킬, 메모리 운용, 도구 선택, 프롬프트 전략이 점진적으로 진화하는 구조다. 이 진화를 무작정 수행하지 않고, 수학적으로 정의한 목적함수/최적점 쪽으로 신경망 기반 value/reward/policy 모델을 이용해 유도하는 것이 핵심 의도다.
+```text
+1. Mini Hermes agent
+   LLM tool-calling loop, tool 실행, 결과 저장, 점수화
 
-2026-05-24 추가 목표는 OpenClaw/Hermes처럼 "말만 하는 에이전트"가 아니라 실제 로컬 작업을 수행하는 도구 기반 에이전트로 발전시키는 것이다. 오늘의 실행 결과물은 사진 폴더 연도별 정리와 Microsoft Paint에서 Apple-style 로고, 수박, 바나나 그림 열기다.
+2. Windows interaction recorder
+   화면 캡처, 마우스/키보드 이벤트 기록, episode 저장, replay, rule-based scoring
 
-## 구현 상태
+3. 원본 Hermes wrapper
+   vendor/hermes-agent를 보존하고 필요할 때 subprocess로 실행
 
-- `main.py`를 PyCharm 샘플 코드에서 실제 에이전트 CLI로 교체했다.
-- OpenAI Agents SDK 기반으로 `General Assistant`, `Coding_Agent`, `Planning_Agent`를 구성했다.
-- `calculate`, `get_current_time` 도구를 추가했다.
-- `DEEPSEEK_API_KEY`가 있으면 DeepSeek OpenAI-compatible endpoint를 사용하도록 수정했다.
-- 기본 DeepSeek 모델은 `deepseek-chat`으로 설정했다.
-- Windows 콘솔의 cp949 출력 문제를 피하려고 stdout/stderr를 UTF-8로 재설정했다.
-- DeepSeek만 사용할 때 OpenAI tracing export 경고가 나오지 않도록 tracing을 비활성화했다.
-- `config.py`를 추가해 API key, provider, model, base URL을 파일에서 관리하게 했다.
-- `AGENT_PROVIDER`, `AGENT_MODEL`, provider별 API key 환경변수로 `config.py` 값을 임시 override할 수 있다.
-- `openai`, `openai_compatible`, `litellm` backend를 지원하도록 구조를 바꿨다.
-- 추후 Gemini는 OpenAI-compatible 또는 LiteLLM 방식, Claude는 LiteLLM 방식으로 붙일 수 있다.
-- `requirements.txt`를 `openai-agents[litellm]>=0.6.0`으로 바꿔 LiteLLM provider를 사용할 수 있게 했다.
-- 민감정보가 담긴 `config.py`가 실수로 버전관리되지 않도록 root `.gitignore`에 추가했다.
-- 장기 설계 방향은 Best-of-N 답변 선택기보다 self-improving agent다. 필요한 핵심 모듈은 trace store, feedback collector, objective/reward model, policy/value model, skill/memory optimizer, evaluation loop다.
-- `agent_tools.py`를 추가했다.
-  - `organize_pictures_by_year`: 이미지 파일을 EXIF 날짜 또는 파일 수정 시간 기준으로 연도별 폴더에 이동/복사한다.
-  - `undo_photo_organization`: 사진 정리 manifest를 기반으로 이동 작업을 되돌린다.
-  - `draw_in_paint`: 설명 기반 이미지를 생성하고 Microsoft Paint에서 연다. 현재 렌더러는 Apple-style 로고, 수박, 바나나 요청을 지원한다.
-  - 그림판 기능은 요청마다 `paint_logo`, `paint_watermelon` 같은 agent tool을 늘리는 방식이 아니라, 하나의 `draw_in_paint` 도구 안에서 렌더러를 선택하는 방식으로 유지한다.
-  - 미지원 그림 요청의 fallback은 한글 프롬프트 텍스트를 이미지에 직접 쓰지 않는다. Pillow 기본 폰트가 한글을 깨진 텍스트처럼 렌더링할 수 있어서, 중립 placeholder 이미지로 바꿨다.
-- `trace_store.py`를 추가했다.
-  - SQLite `agent_runs/agent.db`에 실행 입력, provider, model, 결과, 상태를 저장한다.
-- `main.py`에 새 도구를 연결했다.
-  - "사진 폴더에 있는 이미지 연도별로 정리해줘" 요청에 `organize_pictures_by_year`를 쓰도록 안내했다.
-  - "그림판에서 애플로고 그려줘" 같은 요청에 범용 `draw_in_paint`를 쓰도록 안내했다.
-  - 단발 실행과 대화형 실행 모두 run_id를 출력하고 trace를 저장한다.
-- `requirements.txt`에 `pillow>=10.0.0`을 추가했다.
-- `.gitignore`에 `agent_runs/`를 추가했다.
-- `scripts/verify_local_tools.py`를 추가했다.
-  - LLM 호출 없이 사진 정리/되돌리기, Apple-style 로고 렌더링, 수박 렌더링, trace 저장을 검증한다.
-- `trace_store.py`에서 SQLite 연결을 명시적으로 닫도록 고쳤다. Windows에서 임시 DB 검증 시 파일 잠금이 남는 문제를 막기 위해서다.
-
-## 현재 권한 모델
-
-- 이 프로젝트에는 아직 OpenClaw식 Gateway 권한 계층이 없다.
-- 로컬 도구는 `main.py`를 실행한 Windows 사용자 계정의 권한으로 동작한다.
-- 사진 정리는 별도 관리자 권한을 얻은 것이 아니라, Python 프로세스가 현재 사용자가 접근 가능한 폴더에서 `shutil.move`를 실행한 것이다.
-- 외부 채널/웹훅/상시 실행으로 확장하기 전에는 allowlist, 승인 프롬프트, dry-run, 감사 로그, 위험 경로 차단 같은 권한 계층이 필요하다.
-
-## 학습 자료
-
-- `study/에이전트 개발 특론_오픈클로와 헤르메스로 배우는 로컬 에이전트 입문.pdf`를 생성했다.
-- 표지 포함 정확히 10페이지로 구성했다.
-- 대상 독자는 에이전트/OpenClaw/Hermes/Gateway 개념을 처음 접하는 초보자다.
-- 내용은 챗봇과 에이전트 차이, 도구와 스킬, Gateway와 권한, OpenClaw/Hermes 구조, 현재 프로젝트의 다음 학습 로드맵을 다룬다.
-- 한글 깨짐 방지를 위해 Windows Malgun Gothic 폰트를 PDF에 임베드했고, `pypdf`로 페이지 수와 한글 텍스트 추출을 확인했다.
-
-## OpenClaw/Hermes 방향 점검
-
-2026-05-24에 공개 문서와 레포를 다시 확인했다.
-
-- OpenClaw는 Tools, Skills, Plugins를 구분한다. Tool은 모델이 호출하는 typed function이고, Skill은 `SKILL.md`로 도구를 언제/어떻게 쓸지 알려주는 절차 지식이며, Plugin은 도구/스킬/채널/모델 provider 등을 패키징한다.
-- OpenClaw의 Gateway는 여러 채널과 실행 도구를 하나의 로컬 제어면으로 묶고, 인증/권한/승인 경계를 둔다.
-- Hermes Agent도 Tools & Toolsets, Skills, Persistent Memory를 분리한다. Hermes는 경험에서 스킬을 만들고 개선하며, bounded memory와 session search를 통해 과거 작업을 재사용하는 구조다.
-- 따라서 현재 프로젝트도 요청 하나마다 새 agent tool 함수를 무한히 만드는 방향이 아니라, 소수의 안정적인 primitive tool과 재사용 가능한 skill/memory/evaluation 계층을 쌓는 방향이 맞다.
-
-## 검증 결과
-
-- 프로젝트 `.venv` 환경:
-  - Python: `C:\Users\jh902\PycharmProjects\agent\.venv\Scripts\python.exe`
-  - Version: Python 3.14.0
-  - `openai-agents` 설치됨
-  - `python -m py_compile main.py` 통과
-  - DeepSeek API 호출 1회 성공
-
-- Anaconda `torch_p3.8` 환경:
-  - Python: `C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe`
-  - Version: Python 3.10.20
-  - 처음에는 `agents` 모듈이 설치되어 있지 않아 `ModuleNotFoundError: No module named 'agents'`가 발생했다.
-  - `conda run -n torch_p3.8 python -m pip install -r requirements.txt`로 의존성을 설치했다.
-  - 이후 `openai-agents` import 성공
-  - LiteLLM 설치 및 import 성공
-  - Pillow 설치 성공
-  - `python -m py_compile main.py` 통과
-  - `python -m py_compile main.py agent_tools.py trace_store.py config.py config.example.py scripts\verify_local_tools.py` 통과
-  - `python scripts\verify_local_tools.py` 통과
-  - 환경변수 없이 `config.py`의 DeepSeek 키만으로 API 호출 성공: `2 + 3 = 5입니다.`
-  - 임시 사진 폴더를 자연어 프롬프트로 정리하는 테스트 성공
-  - `agent_runs/paint/apple_logo.png` 생성 및 Paint 실행 성공
-  - `mspaint` 프로세스 확인: `apple_logo - 그림판`
-  - `main.py "그림판 열어서 수박 그려줘"` 실행 성공
-  - `agent_runs/paint/drawing.png` 생성 확인
-  - `mspaint` 프로세스 확인: `drawing - 그림판`
-  - 생성된 수박 이미지 픽셀 검사: red_pixels=51576, green_pixels=183217
-  - `main.py "그림판 열어서 바나나 그려줘"` 실행 성공
-  - 생성된 바나나 이미지 픽셀 검사: yellow_pixels=61239, brown_pixels=20727
-  - 테스트 사진 폴더 프롬프트 실행 성공: 2021/2025 이미지가 각각 `ByYear\2021`, `ByYear\2025`로 이동됨
-  - `agent_runs/agent.db`에 실행 trace 저장 확인
-
-## 실행 모델
-
-- 기본 provider: `deepseek`
-- DeepSeek 사용 시 기본 모델: `deepseek-chat`
-- 환경변수 `AGENT_PROVIDER`, `AGENT_MODEL`로 변경 가능하다.
-
-## 실행 예시
-
-```powershell
-$env:DEEPSEEK_API_KEY = "sk-..."
-$env:AGENT_MODEL = "deepseek-chat"
-.\.venv\Scripts\python.exe main.py "테스트입니다. 2+3만 계산해서 답하세요."
+4. Telegram bridge
+   Telegram 메시지를 Mini Hermes task로 전달
 ```
 
-현재는 `config.py`에 DeepSeek 키가 등록되어 있으므로 PyCharm 실행 버튼처럼 환경변수를 넣지 않는 실행도 동작한다.
+명시적 plan 후보 생성/선택/피드백/패턴 학습 계층은 제거했다. 현재 agent는 단순한 tool-calling loop와 실행 기록 중심이다.
 
-Anaconda `torch_p3.8`에서 실행하려면 아래처럼 실행할 수 있다.
+## 최상위 구조
 
-```powershell
-conda run -n torch_p3.8 python main.py "테스트입니다. 2+3만 계산해서 답하세요."
+```text
+agent/
+  main.py
+  config.py
+  config.example.py
+  README.md
+  SUMMARY.md
+  requirements.txt
+
+  mini_hermes/
+    __main__.py
+    cli.py
+    agent.py
+    llm.py
+    tools.py
+    store.py
+    evaluator.py
+    scheduler.py
+    settings.py
+    privacy.py
+    telegram_bot.py
+    upstream.py
+    upstream_runtime.py
+
+    interaction/
+      schema.py
+      storage.py
+      screen.py
+      win_input.py
+      recorder.py
+      replay.py
+      scoring.py
+
+  scripts/
+    verify_mini_hermes.py
+
+  vendor/
+    hermes-agent/
+
+  agent_runs/
+    mini_hermes/
+      mini_hermes.db
+      screenshots/
+      episodes/
+        episodes.db
+        <episode_id>/
+          episode.jsonl
+          frames/
 ```
 
-또는 conda 환경의 Python을 직접 호출할 수 있다.
+## 큰 그림
 
-```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "테스트입니다. 2+3만 계산해서 답하세요."
+```text
+사용자 / PyCharm / Terminal / Telegram
+        |
+        v
+  main.py or python -m mini_hermes
+        |
+        v
+  mini_hermes/cli.py
+        |
+        +--------------------+
+        |                    |
+        v                    v
+  MiniHermesAgent      Interaction Episode Commands
+  agent.py             interaction/recorder.py
+        |                    |
+        v                    v
+  LLM + Tool Loop       Screen/Input Recorder
+  llm.py/tools.py       screen.py/win_input.py
+        |                    |
+        v                    v
+  MiniHermesStore       EpisodeStore
+  store.py              interaction/storage.py
+        |                    |
+        v                    v
+  mini_hermes.db        episodes.db + episode.jsonl + frames/*.png
 ```
 
-사진 정리:
+## 실행 진입점
 
-```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "사진 폴더에 있는 이미지 연도별로 정리해줘"
+### `main.py`
+
+PyCharm에서 바로 실행하기 위한 thin entrypoint다.
+
+```text
+main.py
+  -> mini_hermes.cli.main()
+  -> 인자가 없으면 chat 모드
 ```
 
-그림판 실행:
+즉 PyCharm에서 `main.py`를 실행하면 내부적으로 다음과 같다.
 
 ```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판에서 애플로고 그려줘"
+python -m mini_hermes chat
 ```
 
-수박 그림판 실행:
+### `mini_hermes/__main__.py`
+
+터미널에서 아래처럼 실행할 때 쓰인다.
 
 ```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 수박 그려줘"
+python -m mini_hermes ...
 ```
 
-바나나 그림판 실행:
+내부적으로는 `mini_hermes.cli.main()`을 호출한다.
+
+### `mini_hermes/cli.py`
+
+프로젝트의 명령어 라우터다. 사람이 입력한 명령을 해석해서 agent, recorder, scheduler, Telegram, upstream wrapper로 연결한다.
+
+```text
+cli.py
+  run/chat             -> agent.py
+  memories/rate/export -> store.py
+  schedule-*           -> scheduler.py
+  telegram-*           -> telegram_bot.py
+  hermes-run           -> upstream_runtime.py
+  episode-*            -> interaction/*
+```
+
+현재 주요 명령어:
+
+```text
+run
+chat
+rate
+memories
+export
+schedule-add
+schedule-list
+schedule-run-due
+doctor
+telegram-bot
+telegram-doctor
+upstream-status
+upstream-import-check
+hermes-run
+episode-record
+episode-list
+episode-score
+episode-feedback
+episode-replay
+episode-export
+```
+
+명령어 없이 문장을 바로 입력하면 자동으로 `run`으로 처리된다.
+
+```text
+python -m mini_hermes "2+2 계산해줘"
+    |
+    v
+python -m mini_hermes run "2+2 계산해줘"
+```
+
+## Mini Hermes Agent 흐름
+
+Mini Hermes agent는 `mini_hermes/agent.py`의 `MiniHermesAgent`가 담당한다.
+
+```text
+사용자 task
+  |
+  v
+MiniHermesAgent.run(task)
+  |
+  +--> store.start_run()
+  |
+  +--> system/user messages 구성
+  |
+  +--> LLM 호출
+  |      |
+  |      +--> final answer면 종료
+  |      |
+  |      +--> tool_calls가 있으면 tools.py로 실행
+  |
+  +--> store.add_step()
+  +--> ToolRegistry.dispatch()
+  +--> store.finish_step()
+  |
+  +--> store.finish_run()
+  +--> evaluator.score_run()
+  +--> store.finish_run(score 포함)
+  |
+  +--> 성공하면 memory 기록
+  |
+  v
+RunResult
+```
+
+현재 agent는 “여러 plan 후보를 만들고 선택하는 구조”가 아니다. LLM이 현재 메시지와 사용 가능한 tool 정의를 보고 tool call 여부를 결정한다.
+
+## Agent 관련 파일
+
+### `mini_hermes/agent.py`
+
+Mini Hermes의 기본 실행 루프다.
+
+역할:
+
+- task를 받아 run 생성
+- system prompt 구성
+- LLM 호출
+- tool call 처리
+- tool 결과를 다시 LLM 메시지에 넣음
+- 최종 답변 생성
+- run 점수화
+- 성공 run을 memory로 저장
+
+핵심 연결:
+
+```text
+agent.py
+  -> llm.py
+  -> tools.py
+  -> store.py
+  -> evaluator.py
+```
+
+### `mini_hermes/llm.py`
+
+LLM 호출 계층이다.
+
+지원:
+
+- OpenAI-compatible API
+- OpenAI API
+- LiteLLM
+- FakeLLM 테스트 클라이언트
+
+`agent.py`는 특정 provider에 직접 의존하지 않고 `LLMClient.complete()` 인터페이스만 사용한다.
+
+### `mini_hermes/tools.py`
+
+LLM이 호출할 수 있는 tool을 정의하고 실행한다.
+
+현재 기본 tool:
+
+```text
+calculate
+capture_screen
+remember
+retrieve_memory
+list_files
+read_text_file
+write_text_file
+open_windows_app
+run_original_hermes
+```
+
+구조:
+
+```text
+Tool
+  name
+  description
+  parameters
+  handler
+
+ToolRegistry
+  register()
+  definitions()  -> LLM에게 넘길 tool schema
+  dispatch()     -> 실제 tool 실행
+```
+
+`run_original_hermes`는 복잡한 browser/web/memory/todo 계열 작업을 원본 Hermes에 위임하는 통로다.
+
+### `mini_hermes/store.py`
+
+Mini Hermes agent 실행 데이터를 SQLite에 저장한다.
+
+저장 테이블:
+
+```text
+runs
+steps
+observations
+memories
+schedules
+upstream_runs
+telegram_messages
+```
+
+역할:
+
+- run 시작/종료 기록
+- tool step 기록
+- screenshot observation 기록
+- memory 저장/검색
+- schedule 저장/조회
+- 원본 Hermes 실행 결과 저장
+- Telegram 수신/처리 이벤트 저장
+- trajectory JSONL export
+
+현재 제거된 것:
+
+```text
+skills
+plan_candidates
+plan_feedback
+plan_patterns
+```
+
+### `mini_hermes/evaluator.py`
+
+agent run을 휴리스틱으로 점수화한다.
+
+입력:
+
+```text
+status
+steps
+started_at
+ended_at
+final_answer
+```
+
+점수 기준:
+
+- 성공 여부
+- blocked 여부
+- tool 수
+- tool error 수
+- 소요 시간
+
+이 점수는 학습 모델이 아니라 첫 버전용 rule-based reward다.
+
+### `mini_hermes/privacy.py`
+
+저장 전에 민감정보를 기본적으로 redaction한다.
+
+현재 처리:
+
+```text
+전화번호 형태 문자열 -> [PHONE]
+API key 형태 문자열 -> [SECRET]
+```
+
+`store.py`, `interaction/storage.py`에서 저장 전에 사용한다.
+
+### `mini_hermes/settings.py`
+
+설정 로더다.
+
+읽는 곳:
+
+```text
+config.py
+환경변수
+```
+
+환경변수가 `config.py`보다 우선한다.
+
+담당 설정:
+
+- LLM provider
+- API key
+- model
+- base URL
+- Telegram bot token
+- Telegram allowed chat id
+- Telegram polling 설정
+
+### `mini_hermes/scheduler.py`
+
+반복 실행 스케줄러다.
+
+```text
+schedule-add
+  -> schedules table에 interval job 저장
+
+schedule-run-due
+  -> due 상태인 task를 MiniHermesAgent로 실행
+```
+
+현재는 cron daemon이 아니라 “due job을 한 번 확인하고 실행하는” 단순 구조다.
+
+## Windows Interaction Episode 흐름
+
+Windows interaction recorder는 `mini_hermes/interaction/` 아래에 모듈화되어 있다.
+
+목표:
+
+```text
+Windows 화면 캡처
+마우스 이동/클릭 기록
+키보드 이벤트 기록
+timestamp 기반 episode 저장
+JSONL/SQLite 동시 저장
+replay
+rule-based scoring
+human feedback 기록
+```
+
+첫 버전에는 신경망이 없다.
+
+```text
+No neural network
+No imitation learning
+No RL
+Only recorder/schema/storage/replay/rule-based scoring
+```
+
+## Episode 기록 흐름
+
+```text
+episode-record "작업 설명"
+  |
+  v
+EpisodeRecorder.record()
+  |
+  +--> EpisodeStore.create_episode()
+  |
+  +--> ScreenCapture.capture()
+  |       |
+  |       +--> frames/*.png 저장
+  |       +--> frames table 기록
+  |       +--> episode.jsonl append
+  |
+  +--> WindowsInputRecorder
+  |       |
+  |       +--> low-level mouse hook
+  |       +--> low-level keyboard hook
+  |       +--> input_events table 기록
+  |       +--> episode.jsonl append
+  |
+  +--> EpisodeStore.finish_episode()
+  |
+  v
+episode_id 반환
+```
+
+저장 위치:
+
+```text
+agent_runs/mini_hermes/episodes/
+  episodes.db
+  <episode_id>/
+    episode.jsonl
+    frames/
+      000000_*.png
+      000001_*.png
+```
+
+## Episode 관련 파일
+
+### `mini_hermes/interaction/schema.py`
+
+episode 데이터 구조를 정의한다.
+
+주요 dataclass:
+
+```text
+Episode
+ScreenFrame
+InputEvent
+AgentPlan
+ToolCallRecord
+ObservationRecord
+ScoreRecord
+HumanFeedback
+```
+
+이 파일은 “어떤 데이터를 저장할 것인가”를 정하는 중심 스키마다.
+
+### `mini_hermes/interaction/storage.py`
+
+episode 저장소다.
+
+동시에 두 곳에 저장한다.
+
+```text
+1. SQLite
+   episodes.db
+
+2. JSONL
+   <episode_id>/episode.jsonl
+```
+
+SQLite 테이블:
+
+```text
+episodes
+frames
+input_events
+agent_plans
+tool_calls
+observations
+scores
+human_feedback
+```
+
+JSONL은 나중에 학습/분석 데이터로 쓰기 쉽게 append-only trace 형태로 남긴다.
+
+### `mini_hermes/interaction/screen.py`
+
+Windows 화면을 캡처한다.
+
+내부적으로 Pillow의 `ImageGrab`을 사용한다.
+
+```text
+ScreenCapture.capture()
+  -> 현재 화면 grab
+  -> PNG 저장
+  -> ScreenFrame 반환
+```
+
+### `mini_hermes/interaction/win_input.py`
+
+Windows 입력 이벤트 기록과 replay를 담당한다.
+
+기록:
+
+```text
+WindowsInputRecorder
+  -> WH_MOUSE_LL hook
+  -> WH_KEYBOARD_LL hook
+  -> InputEvent 생성
+```
+
+Replay:
+
+```text
+WindowsInputReplayer
+  -> dry-run이면 요약만 출력
+  -> --execute면 SendInput으로 실제 mouse/keyboard 이벤트 전송
+```
+
+개인정보 보호:
+
+```text
+record_key_text=False 기본값
+```
+
+즉 기본적으로 키 입력 원문은 저장하지 않는다. `key_code`, `key_name`, modifier 중심으로 저장한다.
+
+### `mini_hermes/interaction/recorder.py`
+
+screen capture와 input hook을 episode 단위로 묶는 상위 recorder다.
+
+```text
+EpisodeRecorder
+  -> EpisodeStore
+  -> ScreenCapture
+  -> WindowsInputRecorder
+```
+
+CLI의 `episode-record`가 이 파일을 사용한다.
+
+### `mini_hermes/interaction/replay.py`
+
+저장된 input event를 다시 재생하거나 dry-run으로 검사한다.
+
+```text
+episode-replay <episode_id>
+  -> dry-run summary 출력
+
+episode-replay <episode_id> --execute
+  -> 실제 입력 이벤트 전송
+```
+
+실제 replay는 현재 포커스된 Windows UI에 영향을 주므로 안전한 테스트 창에서만 사용해야 한다.
+
+### `mini_hermes/interaction/scoring.py`
+
+episode를 rule-based로 점수화한다.
+
+점수 기준:
+
+- episode status
+- frame 수
+- input event 수
+- tool call 수
+- tool error 수
+- recorder error 수
+- duration
+
+결과는 `scores` table과 `episode.jsonl`에 저장된다.
+
+## Telegram 흐름
+
+```text
+Telegram user
+  |
+  v
+Telegram Bot API polling
+  |
+  v
+telegram_bot.py
+  |
+  +--> /id, /status, /rate 처리
+  |
+  +--> 일반 메시지 or /run
+          |
+          v
+     MiniHermesAgent.run()
+          |
+          v
+     결과를 Telegram으로 응답
+```
+
+### `mini_hermes/telegram_bot.py`
+
+Telegram Bot API를 표준 라이브러리 HTTP 호출로 사용한다.
+
+특징:
+
+- 별도 Telegram 패키지 의존성 없음
+- polling 방식
+- allowed chat id 기반 접근 제한
+- Telegram 메시지 처리 결과를 `telegram_messages` table에 저장
+
+## 원본 Hermes wrapper 흐름
+
+```text
+Mini Hermes
+  |
+  +--> run_original_hermes tool
+          |
+          v
+     upstream_runtime.py
+          |
+          v
+     vendor/hermes-agent subprocess 실행
+          |
+          v
+     stdout/stderr/status 저장
+```
+
+### `mini_hermes/upstream.py`
+
+`vendor/hermes-agent`가 정상 보존되어 있는지 확인하고, 주요 upstream module import 가능성을 검사한다.
+
+CLI:
 
 ```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe main.py "그림판 열어서 바나나 그려줘"
+python -m mini_hermes upstream-status
+python -m mini_hermes upstream-import-check
 ```
 
-로컬 도구 검증:
+### `mini_hermes/upstream_runtime.py`
+
+원본 Hermes를 subprocess로 실행한다.
+
+담당:
+
+- Mini Hermes provider 설정을 원본 Hermes 환경변수로 변환
+- toolset allow/deny 처리
+- browser path 환경변수 주입
+- 실행 결과를 `upstream_runs` table에 저장할 수 있게 반환
+
+CLI:
 
 ```powershell
-C:\Users\jh902\anaconda3\envs\torch_p3.8\python.exe scripts\verify_local_tools.py
+python -m mini_hermes hermes-run "요청" --toolsets browser,web,memory,todo
 ```
+
+## 데이터 저장 구조
+
+### Mini Hermes agent DB
+
+```text
+agent_runs/mini_hermes/mini_hermes.db
+```
+
+테이블:
+
+```text
+runs
+steps
+observations
+memories
+schedules
+upstream_runs
+telegram_messages
+```
+
+용도:
+
+```text
+agent 실행 기록
+tool call 기록
+screenshot observation
+memory
+schedule
+원본 Hermes 실행 로그
+Telegram bridge 로그
+```
+
+### Episode recorder DB
+
+```text
+agent_runs/mini_hermes/episodes/episodes.db
+```
+
+테이블:
+
+```text
+episodes
+frames
+input_events
+agent_plans
+tool_calls
+observations
+scores
+human_feedback
+```
+
+용도:
+
+```text
+Windows 화면/입력 행동 데이터셋
+replay 가능한 timestamp event 기록
+rule-based score
+human feedback
+```
+
+## 명령어별 내부 연결
+
+```text
+run
+  -> cli._run()
+  -> MiniHermesAgent.run()
+
+chat
+  -> cli._chat()
+  -> MiniHermesAgent.run() 반복
+
+rate
+  -> MiniHermesStore.rate_run()
+
+memories
+  -> MiniHermesStore.search_memories()
+
+export
+  -> MiniHermesStore.export_trajectories_jsonl()
+
+episode-record
+  -> EpisodeRecorder.record()
+
+episode-list
+  -> EpisodeStore.list_episodes()
+
+episode-score
+  -> RuleBasedEpisodeScorer.score()
+
+episode-feedback
+  -> EpisodeStore.add_human_feedback()
+
+episode-replay
+  -> EpisodeReplayer.replay()
+  -> WindowsInputReplayer
+
+episode-export
+  -> EpisodeStore.export_episode_jsonl()
+
+telegram-bot
+  -> TelegramHermesBridge.run_forever()
+
+hermes-run
+  -> UpstreamHermesRuntime.run_oneshot()
+```
+
+## 현재 연구 방향에서 중요한 포인트
+
+현재 코드베이스는 “바로 학습하는 agent”가 아니라, 학습/최적화 연구를 위한 데이터를 쌓는 기반이다.
+
+지금 저장되는 데이터:
+
+```text
+agent task
+tool call trajectory
+screen observation
+Windows screen frames
+mouse/keyboard events
+agent plan metadata
+tool call metadata
+rule-based score
+human feedback
+```
+
+다음 단계에서 붙일 수 있는 것:
+
+```text
+trajectory 분석
+behavior cloning dataset 구성
+reward model 학습
+policy optimization
+screen-action model
+task success classifier
+```
+
+중요한 안전 기본값:
+
+```text
+키 입력 원문 저장 비활성화
+Telegram allowed chat id 필요
+replay는 기본 dry-run
+원본 Hermes dangerous toolset 기본 차단
+파일 tool은 workspace 밖 접근 차단
+전화번호/API-key 형태 문자열 redaction
+```
+
+## 검증
+
+기본 검증:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\verify_mini_hermes.py
+```
+
+검증 스크립트가 확인하는 것:
+
+```text
+upstream Hermes adapter
+upstream runtime 환경변수 매핑
+Mini Hermes tool-calling loop
+blocked run redaction
+Telegram bridge
+workspace 파일 guardrail
+episode storage/scoring/replay/export
+```
+
