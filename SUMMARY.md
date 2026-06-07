@@ -8,8 +8,8 @@
 1. Mini Hermes agent
    LLM tool-calling loop, tool 실행, 결과 저장, 점수화
 
-2. Windows interaction recorder
-   화면 캡처, 마우스/키보드 이벤트 기록, episode 저장, replay, rule-based scoring
+2. Display video dataset recorder
+   Windows 화면 캡처, 마우스/키보드 이벤트 기록, episode 저장, replay, rule-based scoring
 
 3. 원본 Hermes wrapper
    vendor/hermes-agent를 보존하고 필요할 때 subprocess로 실행
@@ -31,6 +31,16 @@ agent/
   SUMMARY.md
   requirements.txt
 
+  agent_runs/
+    mini_hermes/
+      mini_hermes.db
+      screenshots/
+      episodes/
+        episodes.db
+        <episode_id>/
+          episode.jsonl
+          frames/
+
   mini_hermes/
     __main__.py
     cli.py
@@ -46,30 +56,20 @@ agent/
     upstream.py
     upstream_runtime.py
 
-    interaction/
-      schema.py
-      storage.py
-      screen.py
-      win_input.py
-      recorder.py
-      replay.py
-      scoring.py
+  dataset/
+    schema.py
+    storage.py
+    screen.py
+    win_input.py
+    recorder.py
+    replay.py
+    scoring.py
 
-  scripts/
+  script/
     verify_mini_hermes.py
 
   vendor/
     hermes-agent/
-
-  agent_runs/
-    mini_hermes/
-      mini_hermes.db
-      screenshots/
-      episodes/
-        episodes.db
-        <episode_id>/
-          episode.jsonl
-          frames/
 ```
 
 ## 큰 그림
@@ -86,8 +86,8 @@ agent/
         +--------------------+
         |                    |
         v                    v
-  MiniHermesAgent      Interaction Episode Commands
-  agent.py             interaction/recorder.py
+  MiniHermesAgent      Dataset Episode Commands
+  agent.py             dataset/recorder.py
         |                    |
         v                    v
   LLM + Tool Loop       Screen/Input Recorder
@@ -95,7 +95,7 @@ agent/
         |                    |
         v                    v
   MiniHermesStore       EpisodeStore
-  store.py              interaction/storage.py
+  store.py              dataset/storage.py
         |                    |
         v                    v
   mini_hermes.db        episodes.db + episode.jsonl + frames/*.png
@@ -140,7 +140,7 @@ cli.py
   schedule-*           -> scheduler.py
   telegram-*           -> telegram_bot.py
   hermes-run           -> upstream_runtime.py
-  episode-*            -> interaction/*
+  episode-*            -> dataset/*
 ```
 
 현재 주요 명령어:
@@ -359,7 +359,7 @@ final_answer
 API key 형태 문자열 -> [SECRET]
 ```
 
-`store.py`, `interaction/storage.py`에서 저장 전에 사용한다.
+`store.py`, `dataset/storage.py`에서 저장 전에 사용한다.
 
 ### `mini_hermes/settings.py`
 
@@ -398,9 +398,9 @@ schedule-run-due
 
 현재는 cron daemon이 아니라 “due job을 한 번 확인하고 실행하는” 단순 구조다.
 
-## Windows Interaction Episode 흐름
+## Display Video Dataset Episode 흐름
 
-Windows interaction recorder는 `mini_hermes/interaction/` 아래에 모듈화되어 있다.
+Display video dataset recorder는 `dataset/` 아래에 모듈화되어 있다.
 
 목표:
 
@@ -467,7 +467,7 @@ agent_runs/mini_hermes/episodes/
 
 ## Episode 관련 파일
 
-### `mini_hermes/interaction/schema.py`
+### `dataset/schema.py`
 
 episode 데이터 구조를 정의한다.
 
@@ -486,7 +486,7 @@ HumanFeedback
 
 이 파일은 “어떤 데이터를 저장할 것인가”를 정하는 중심 스키마다.
 
-### `mini_hermes/interaction/storage.py`
+### `dataset/storage.py`
 
 episode 저장소다.
 
@@ -515,7 +515,7 @@ human_feedback
 
 JSONL은 나중에 학습/분석 데이터로 쓰기 쉽게 append-only trace 형태로 남긴다.
 
-### `mini_hermes/interaction/screen.py`
+### `dataset/screen.py`
 
 Windows 화면을 캡처한다.
 
@@ -528,7 +528,7 @@ ScreenCapture.capture()
   -> ScreenFrame 반환
 ```
 
-### `mini_hermes/interaction/win_input.py`
+### `dataset/win_input.py`
 
 Windows 입력 이벤트 기록과 replay를 담당한다.
 
@@ -557,7 +557,7 @@ record_key_text=False 기본값
 
 즉 기본적으로 키 입력 원문은 저장하지 않는다. `key_code`, `key_name`, modifier 중심으로 저장한다.
 
-### `mini_hermes/interaction/recorder.py`
+### `dataset/recorder.py`
 
 screen capture와 input hook을 episode 단위로 묶는 상위 recorder다.
 
@@ -570,7 +570,7 @@ EpisodeRecorder
 
 CLI의 `episode-record`가 이 파일을 사용한다.
 
-### `mini_hermes/interaction/replay.py`
+### `dataset/replay.py`
 
 저장된 input event를 다시 재생하거나 dry-run으로 검사한다.
 
@@ -584,7 +584,7 @@ episode-replay <episode_id> --execute
 
 실제 replay는 현재 포커스된 Windows UI에 영향을 주므로 안전한 테스트 창에서만 사용해야 한다.
 
-### `mini_hermes/interaction/scoring.py`
+### `dataset/scoring.py`
 
 episode를 rule-based로 점수화한다.
 
@@ -829,7 +829,7 @@ replay는 기본 dry-run
 기본 검증:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_mini_hermes.py
+.\.venv\Scripts\python.exe script\verify_mini_hermes.py
 ```
 
 검증 스크립트가 확인하는 것:

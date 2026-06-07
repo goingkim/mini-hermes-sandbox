@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from mini_hermes.interaction.schema import (
+from dataset.schema import (
     AgentPlan,
     Episode,
     HumanFeedback,

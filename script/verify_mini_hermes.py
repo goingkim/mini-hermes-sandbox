@@ -12,10 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from mini_hermes.agent import MiniHermesAgent  # noqa: E402
-from mini_hermes.interaction.replay import EpisodeReplayer  # noqa: E402
-from mini_hermes.interaction.scoring import RuleBasedEpisodeScorer  # noqa: E402
-from mini_hermes.interaction.schema import InputEvent, ScreenFrame, new_id, now_ts  # noqa: E402
-from mini_hermes.interaction.storage import EpisodeStore  # noqa: E402
+from dataset.replay import EpisodeReplayer  # noqa: E402
+from dataset.scoring import RuleBasedEpisodeScorer  # noqa: E402
+from dataset.schema import InputEvent, ScreenFrame, new_id, now_ts  # noqa: E402
+from dataset.storage import EpisodeStore  # noqa: E402
 from mini_hermes.llm import FakeLLM  # noqa: E402
 from mini_hermes.settings import Settings, TelegramSettings  # noqa: E402
 from mini_hermes.store import MiniHermesStore  # noqa: E402

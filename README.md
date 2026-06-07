@@ -1,6 +1,6 @@
 # Mini Hermes Research Agent
 
-Hermes-style research agent plus Windows interaction episode recorder, kept deliberately small.
+Hermes-style research agent plus display video dataset episode recorder, kept deliberately small.
 
 ## Setup
 
@@ -37,7 +37,7 @@ Interactive chat:
 .\.venv\Scripts\python.exe -m mini_hermes chat --no-observe
 ```
 
-## Windows Interaction Episodes
+## Display Video Dataset Episodes
 
 Windows 10/11 화면 프레임과 입력 이벤트를 episode 단위로 기록합니다. 키 입력 원문 저장은 기본 비활성화되어 있고, 기본 기록은 key code/name 중심입니다.
 
@@ -127,7 +127,7 @@ Use `mini_hermes/upstream_runtime.py` when Mini Hermes needs to run original Her
 - `mini_hermes/privacy.py`: basic phone/API-key redaction before persistence
 - `mini_hermes/scheduler.py`: interval schedule runner
 - `mini_hermes/telegram_bot.py`: Telegram Bot API polling bridge
-- `mini_hermes/interaction/`: Windows episode recorder, schema, storage, replay, and rule-based scoring
+- `dataset/`: display video dataset recorder, schema, storage, replay, and rule-based scoring
 - `mini_hermes/upstream.py`: adapter for vendored upstream Hermes modules
 - `mini_hermes/upstream_runtime.py`: wrapper that executes vendored original Hermes with Mini Hermes config
 - `mini_hermes/cli.py`: command-line interface
@@ -137,5 +137,5 @@ Use `mini_hermes/upstream_runtime.py` when Mini Hermes needs to run original Her
 No API call:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\verify_mini_hermes.py
+.\.venv\Scripts\python.exe script\verify_mini_hermes.py
 ```

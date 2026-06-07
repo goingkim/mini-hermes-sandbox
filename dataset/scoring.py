@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from mini_hermes.interaction.storage import EpisodeStore
+from dataset.storage import EpisodeStore
 
 
 @dataclass(frozen=True)

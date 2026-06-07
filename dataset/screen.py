@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mini_hermes.interaction.schema import ScreenFrame, new_id, now_ts
+from dataset.schema import ScreenFrame, new_id, now_ts
 
 try:
     from PIL import ImageGrab

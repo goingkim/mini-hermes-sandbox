@@ -4,10 +4,10 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from mini_hermes.interaction.schema import Episode
-from mini_hermes.interaction.screen import ScreenCapture
-from mini_hermes.interaction.storage import EpisodeStore
-from mini_hermes.interaction.win_input import WindowsInputRecorder
+from dataset.schema import Episode
+from dataset.screen import ScreenCapture
+from dataset.storage import EpisodeStore
+from dataset.win_input import WindowsInputRecorder
 
 
 @dataclass(frozen=True)
@@ -43,7 +43,7 @@ class EpisodeRecorder:
         episode = self.store.create_episode(
             task=task,
             metadata={
-                "recorder": "mini_hermes.interaction",
+                "recorder": "dataset",
                 "fps": fps,
                 "capture_input": capture_input,
                 "record_key_text": record_key_text,

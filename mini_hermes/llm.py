@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from openai import AsyncOpenAI
-
 from mini_hermes.settings import Settings
 
 
@@ -24,6 +22,11 @@ class OpenAICompatibleLLM:
     settings: Settings
 
     def __post_init__(self) -> None:
+        try:
+            from openai import AsyncOpenAI
+        except ImportError as exc:
+            raise RuntimeError("OpenAI backend requires openai to be installed") from exc
+
         kwargs: dict[str, Any] = {"api_key": self.settings.api_key}
         if self.settings.base_url:
             kwargs["base_url"] = self.settings.base_url

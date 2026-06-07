@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from mini_hermes.interaction.storage import EpisodeStore
-from mini_hermes.interaction.win_input import WindowsInputReplayer
+from dataset.storage import EpisodeStore
+from dataset.win_input import WindowsInputReplayer
 
 
 @dataclass(frozen=True)

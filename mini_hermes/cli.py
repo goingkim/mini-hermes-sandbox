@@ -6,10 +6,10 @@ import sys
 from pathlib import Path
 
 from mini_hermes.agent import MiniHermesAgent
-from mini_hermes.interaction.recorder import EpisodeRecorder
-from mini_hermes.interaction.replay import EpisodeReplayer
-from mini_hermes.interaction.scoring import RuleBasedEpisodeScorer
-from mini_hermes.interaction.storage import EpisodeStore
+from dataset.recorder import EpisodeRecorder
+from dataset.replay import EpisodeReplayer
+from dataset.scoring import RuleBasedEpisodeScorer
+from dataset.storage import EpisodeStore
 from mini_hermes.privacy import clean_text
 from mini_hermes.scheduler import MiniHermesScheduler
 from mini_hermes.settings import load_telegram_settings
@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--plan-step", action="append", default=[], help="Optional agent plan step metadata.")
     record.add_argument("--root", default="agent_runs/mini_hermes/episodes")
 
-    episode_list = sub.add_parser("episode-list", help="List recorded interaction episodes.")
+    episode_list = sub.add_parser("episode-list", help="List recorded dataset episodes.")
     episode_list.add_argument("--limit", type=int, default=10)
     episode_list.add_argument("--root", default="agent_runs/mini_hermes/episodes")
 

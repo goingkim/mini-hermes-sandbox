@@ -7,7 +7,7 @@ import time
 from ctypes import wintypes
 from typing import Callable
 
-from mini_hermes.interaction.schema import InputEvent, new_id, now_ts
+from dataset.schema import InputEvent, new_id, now_ts
 
 
 InputCallback = Callable[[InputEvent], None]
