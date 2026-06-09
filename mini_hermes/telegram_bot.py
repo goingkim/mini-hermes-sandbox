@@ -214,7 +214,6 @@ class TelegramHermesBridge:
             )
 
         async with self._run_lock:
-            await self.client.send_message(message.chat_id, "Mini Hermes 작업을 시작합니다.", message.message_id)
             try:
                 result = await self.agent.run(task, learn=True)
             except Exception as exc:

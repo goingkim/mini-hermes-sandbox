@@ -216,7 +216,6 @@ async def _verify_telegram_bridge() -> None:
             }
         )
         sent_text = "\n".join(message["text"] for message in client.sent_messages)
-        _assert("Mini Hermes 작업을 시작합니다" in sent_text, "telegram bridge did not acknowledge task")
         _assert("텔레그램 브리지 응답입니다" in sent_text, "telegram bridge did not return agent answer")
         _assert("run_id=" in sent_text, "telegram bridge response did not include run id")
 
