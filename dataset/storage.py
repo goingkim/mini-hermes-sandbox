@@ -17,6 +17,7 @@ from dataset.schema import (
     ScoreRecord,
     ScreenFrame,
     ToolCallRecord,
+    UIPrimitiveRecord,
     new_id,
     now_ts,
     to_json_record,
@@ -152,6 +153,44 @@ class EpisodeStore:
             )
             conn.commit()
         self._append_jsonl(event.episode_id, "input_event", event)
+
+    def add_ui_primitive(self, primitive: UIPrimitiveRecord) -> None:
+        self._insert_ui_primitive(primitive)
+        self._append_jsonl(primitive.episode_id, "ui_primitive", primitive)
+
+    def replace_ui_primitives(
+        self,
+        episode_id: str,
+        primitives: list[UIPrimitiveRecord],
+        source: str = "auto",
+    ) -> None:
+        batch_id = new_id("primitive_batch")
+        with closing(self._connect()) as conn:
+            conn.execute("delete from ui_primitives where episode_id = ?", (episode_id,))
+            for primitive in primitives:
+                self._insert_ui_primitive(primitive, conn=conn)
+            conn.commit()
+        self._append_jsonl(
+            episode_id,
+            "ui_primitives_replaced",
+            {
+                "episode_id": episode_id,
+                "timestamp": now_ts(),
+                "batch_id": batch_id,
+                "source": redact_text(source),
+                "primitive_count": len(primitives),
+            },
+        )
+        for primitive in primitives:
+            payload = {
+                **asdict(primitive),
+                "metadata": {
+                    **primitive.metadata,
+                    "batch_id": batch_id,
+                    "source": source,
+                },
+            }
+            self._append_jsonl(episode_id, "ui_primitive", payload)
 
     def add_agent_plan(
         self,
@@ -364,6 +403,12 @@ class EpisodeStore:
             (episode_id,),
         )
 
+    def get_ui_primitives(self, episode_id: str) -> list[dict[str, Any]]:
+        return self._fetch_dicts(
+            "select * from ui_primitives where episode_id = ? order by primitive_index asc",
+            (episode_id,),
+        )
+
     def get_tool_calls(self, episode_id: str) -> list[dict[str, Any]]:
         return self._fetch_dicts(
             "select * from tool_calls where episode_id = ? order by timestamp asc",
@@ -413,6 +458,44 @@ class EpisodeStore:
             record = to_json_record(record_type, payload)
         with path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+    def _insert_ui_primitive(
+        self,
+        primitive: UIPrimitiveRecord,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        owns_conn = conn is None
+        active_conn = conn or self._connect()
+        try:
+            active_conn.execute(
+                """
+                insert into ui_primitives (
+                    primitive_id, episode_id, timestamp, primitive_index, name,
+                    start_timestamp, end_timestamp, frame_id, input_event_ids_json,
+                    target_json, value_json, metadata_json
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    primitive.primitive_id,
+                    primitive.episode_id,
+                    primitive.timestamp,
+                    primitive.index,
+                    redact_text(primitive.name),
+                    primitive.start_timestamp,
+                    primitive.end_timestamp,
+                    redact_text(primitive.frame_id),
+                    json.dumps(redact_obj(primitive.input_event_ids), ensure_ascii=False),
+                    json.dumps(redact_obj(primitive.target), ensure_ascii=False, sort_keys=True),
+                    json.dumps(redact_obj(primitive.value), ensure_ascii=False, sort_keys=True),
+                    json.dumps(redact_obj(primitive.metadata), ensure_ascii=False, sort_keys=True),
+                ),
+            )
+            if owns_conn:
+                active_conn.commit()
+        finally:
+            if owns_conn:
+                active_conn.close()
 
     def _fetch_one(self, query: str, params: tuple[Any, ...] = ()) -> dict[str, Any] | None:
         with closing(self._connect()) as conn:
@@ -469,6 +552,21 @@ class EpisodeStore:
                     metadata_json text not null
                 );
 
+                create table if not exists ui_primitives (
+                    primitive_id text primary key,
+                    episode_id text not null,
+                    timestamp real not null,
+                    primitive_index integer not null,
+                    name text not null,
+                    start_timestamp real not null,
+                    end_timestamp real not null,
+                    frame_id text,
+                    input_event_ids_json text not null,
+                    target_json text not null,
+                    value_json text not null,
+                    metadata_json text not null
+                );
+
                 create table if not exists agent_plans (
                     plan_id text primary key,
                     episode_id text not null,
@@ -518,6 +616,7 @@ class EpisodeStore:
 
                 create index if not exists idx_episode_frames on frames(episode_id, frame_index);
                 create index if not exists idx_episode_input_events on input_events(episode_id, timestamp);
+                create index if not exists idx_episode_ui_primitives on ui_primitives(episode_id, primitive_index);
                 create index if not exists idx_episode_tool_calls on tool_calls(episode_id, timestamp);
                 create index if not exists idx_episode_scores on scores(episode_id, timestamp);
                 """

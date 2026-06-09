@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from mini_hermes.agent import MiniHermesAgent
+from dataset.primitives import UIPrimitiveBuilder
 from dataset.recorder import EpisodeRecorder
 from dataset.replay import EpisodeReplayer
 from dataset.scoring import RuleBasedEpisodeScorer
@@ -37,6 +38,8 @@ KNOWN_COMMANDS = {
     "episode-record",
     "episode-list",
     "episode-score",
+    "episode-build-primitives",
+    "episode-export-primitives",
     "episode-feedback",
     "episode-replay",
     "episode-export",
@@ -89,6 +92,10 @@ def main(argv: list[str] | None = None) -> None:
         _episode_list(args)
     elif args.command == "episode-score":
         _episode_score(args)
+    elif args.command == "episode-build-primitives":
+        _episode_build_primitives(args)
+    elif args.command == "episode-export-primitives":
+        _episode_export_primitives(args)
     elif args.command == "episode-feedback":
         _episode_feedback(args)
     elif args.command == "episode-replay":
@@ -180,6 +187,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Store simple printable key text. Off by default for privacy.",
     )
     record.add_argument("--plan-step", action="append", default=[], help="Optional agent plan step metadata.")
+    record.add_argument("--skill", default="", help="Optional high-level skill name, e.g. send-email.")
+    record.add_argument(
+        "--expected-primitive",
+        action="append",
+        default=[],
+        help="Optional expected UI primitive label. Repeat for sequences.",
+    )
     record.add_argument("--root", default="agent_runs/mini_hermes/episodes")
 
     episode_list = sub.add_parser("episode-list", help="List recorded dataset episodes.")
@@ -189,6 +203,31 @@ def build_parser() -> argparse.ArgumentParser:
     episode_score = sub.add_parser("episode-score", help="Score a recorded episode with rule-based heuristics.")
     episode_score.add_argument("episode_id")
     episode_score.add_argument("--root", default="agent_runs/mini_hermes/episodes")
+
+    primitive_build = sub.add_parser(
+        "episode-build-primitives",
+        help="Build UI primitive labels from a recorded episode.",
+    )
+    primitive_build.add_argument("episode_id")
+    primitive_build.add_argument("--root", default="agent_runs/mini_hermes/episodes")
+    primitive_build.add_argument(
+        "--no-verify-state",
+        action="store_true",
+        help="Do not add a final verify_state primitive linked to the last frame.",
+    )
+
+    primitive_export = sub.add_parser(
+        "episode-export-primitives",
+        help="Export UI primitive training samples as JSONL.",
+    )
+    primitive_export.add_argument("episode_id")
+    primitive_export.add_argument("--output", required=True)
+    primitive_export.add_argument("--root", default="agent_runs/mini_hermes/episodes")
+    primitive_export.add_argument(
+        "--no-build",
+        action="store_true",
+        help="Do not auto-build primitive labels when missing.",
+    )
 
     feedback = sub.add_parser("episode-feedback", help="Attach human feedback to a recorded episode.")
     feedback.add_argument("episode_id")
@@ -424,6 +463,8 @@ def _episode_record(args: argparse.Namespace) -> None:
         capture_input=not args.no_input,
         record_key_text=args.record_key_text,
         agent_plan=args.plan_step,
+        skill_name=args.skill,
+        expected_ui_primitives=args.expected_primitive,
     )
     print(f"episode_id={result.episode_id}")
     print(f"status={result.status}")
@@ -447,6 +488,30 @@ def _episode_score(args: argparse.Namespace) -> None:
     print(f"score={result.score:.3f}")
     print(f"reason={result.reason}")
     print(f"metrics={result.metrics}")
+
+
+def _episode_build_primitives(args: argparse.Namespace) -> None:
+    builder = UIPrimitiveBuilder(EpisodeStore(args.root))
+    result = builder.build(
+        args.episode_id,
+        persist=True,
+        include_verify_state=not args.no_verify_state,
+    )
+    print(f"episode_id={result.episode_id}")
+    print(f"primitive_count={result.primitive_count}")
+    print(f"counts={result.counts}")
+
+
+def _episode_export_primitives(args: argparse.Namespace) -> None:
+    builder = UIPrimitiveBuilder(EpisodeStore(args.root))
+    result = builder.export_training_jsonl(
+        args.episode_id,
+        output_path=args.output,
+        build_if_missing=not args.no_build,
+    )
+    print(f"episode_id={result.episode_id}")
+    print(f"sample_count={result.sample_count}")
+    print(f"jsonl={result.output_path}")
 
 
 def _episode_feedback(args: argparse.Namespace) -> None:

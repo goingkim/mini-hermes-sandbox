@@ -33,6 +33,8 @@ class EpisodeRecorder:
         capture_input: bool = True,
         record_key_text: bool = False,
         agent_plan: list[str] | None = None,
+        skill_name: str = "",
+        expected_ui_primitives: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> RecordingResult:
         if duration_seconds <= 0:
@@ -47,6 +49,8 @@ class EpisodeRecorder:
                 "fps": fps,
                 "capture_input": capture_input,
                 "record_key_text": record_key_text,
+                "skill_name": skill_name,
+                "expected_ui_primitives": expected_ui_primitives or [],
                 **(metadata or {}),
             },
         )

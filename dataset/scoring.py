@@ -26,6 +26,7 @@ class RuleBasedEpisodeScorer:
 
         frames = self.store.get_frames(episode_id)
         events = self.store.get_input_events(episode_id)
+        primitives = self.store.get_ui_primitives(episode_id)
         tool_calls = self.store.get_tool_calls(episode_id)
         observations = self.store.get_observations(episode_id)
         status = str(episode.get("status") or "")
@@ -35,6 +36,10 @@ class RuleBasedEpisodeScorer:
         key_events = sum(1 for event in events if event.get("kind") == "keyboard")
         mouse_events = sum(1 for event in events if event.get("kind") == "mouse")
         clicks = sum(1 for event in events if str(event.get("action", "")).endswith("_down"))
+        primitive_counts: dict[str, int] = {}
+        for primitive in primitives:
+            name = str(primitive.get("name") or "")
+            primitive_counts[name] = primitive_counts.get(name, 0) + 1
         tool_errors = sum(1 for call in tool_calls if call.get("status") not in {"recorded", "success", "completed"})
         recorder_errors = sum(1 for item in observations if item.get("kind") == "recorder_error")
 
@@ -51,6 +56,8 @@ class RuleBasedEpisodeScorer:
             score -= 0.1
         if duration > 300:
             score -= 0.1
+        if events and not primitives:
+            score -= 0.05
         score = max(0.0, min(1.0, score))
 
         metrics = {
@@ -61,13 +68,16 @@ class RuleBasedEpisodeScorer:
             "keyboard_event_count": key_events,
             "mouse_event_count": mouse_events,
             "click_count": clicks,
+            "ui_primitive_count": len(primitives),
+            "ui_primitive_counts": primitive_counts,
             "tool_call_count": len(tool_calls),
             "tool_error_count": tool_errors,
             "recorder_error_count": recorder_errors,
         }
         reason = (
             f"rule_based status={status}, frames={len(frames)}, inputs={len(events)}, "
-            f"tool_errors={tool_errors}, recorder_errors={recorder_errors}, duration={duration:.2f}s"
+            f"primitives={len(primitives)}, tool_errors={tool_errors}, "
+            f"recorder_errors={recorder_errors}, duration={duration:.2f}s"
         )
         result = EpisodeScore(
             episode_id=episode_id,

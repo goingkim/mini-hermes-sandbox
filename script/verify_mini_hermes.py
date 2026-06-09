@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from mini_hermes.agent import MiniHermesAgent  # noqa: E402
+from dataset.primitives import UIPrimitiveBuilder  # noqa: E402
 from dataset.replay import EpisodeReplayer  # noqa: E402
 from dataset.scoring import RuleBasedEpisodeScorer  # noqa: E402
 from dataset.schema import InputEvent, ScreenFrame, new_id, now_ts  # noqa: E402
@@ -296,7 +297,7 @@ def _verify_episode_storage_scoring_replay() -> None:
             ScreenFrame(
                 frame_id=new_id("frame"),
                 episode_id=episode.episode_id,
-                timestamp=now_ts(),
+                timestamp=episode.started_at,
                 index=0,
                 image_path=str(frame_path),
                 width=10,
@@ -307,7 +308,31 @@ def _verify_episode_storage_scoring_replay() -> None:
             InputEvent(
                 event_id=new_id("input"),
                 episode_id=episode.episode_id,
-                timestamp=now_ts(),
+                timestamp=episode.started_at + 0.1,
+                kind="mouse",
+                action="left_down",
+                x=3,
+                y=4,
+                button="left",
+            )
+        )
+        store.add_input_event(
+            InputEvent(
+                event_id=new_id("input"),
+                episode_id=episode.episode_id,
+                timestamp=episode.started_at + 0.2,
+                kind="mouse",
+                action="left_up",
+                x=3,
+                y=4,
+                button="left",
+            )
+        )
+        store.add_input_event(
+            InputEvent(
+                event_id=new_id("input"),
+                episode_id=episode.episode_id,
+                timestamp=episode.started_at + 0.3,
                 kind="keyboard",
                 action="key_down",
                 key_code=65,
@@ -327,21 +352,39 @@ def _verify_episode_storage_scoring_replay() -> None:
         store.add_human_feedback(episode.episode_id, score=0.8, text="좋음")
         store.finish_episode(episode.episode_id, status="completed")
 
+        primitive_builder = UIPrimitiveBuilder(store)
+        primitive_result = primitive_builder.build(episode.episode_id)
+        _assert(primitive_result.primitive_count >= 3, "ui primitive labels were not built")
+        primitives = store.get_ui_primitives(episode.episode_id)
+        primitive_names = {str(item["name"]) for item in primitives}
+        _assert("click" in primitive_names, "click primitive missing")
+        _assert("type_text" in primitive_names, "type_text primitive missing")
+        _assert("verify_state" in primitive_names, "verify_state primitive missing")
+        primitive_export = primitive_builder.export_training_jsonl(
+            episode.episode_id,
+            root / "primitive_samples.jsonl",
+        )
+        _assert(primitive_export.sample_count == len(primitives), "primitive export sample count mismatch")
+        exported_primitives = Path(primitive_export.output_path).read_text(encoding="utf-8")
+        _assert('"sample_type": "ui_primitive"' in exported_primitives, "primitive export missing sample type")
+
         scorer = RuleBasedEpisodeScorer(store)
         score = scorer.score(episode.episode_id)
         _assert(score.score > 0.5, "episode score should be positive for completed episode")
+        _assert(score.metrics["ui_primitive_count"] >= 3, "episode score missing primitive metrics")
         latest = store.get_latest_score(episode.episode_id)
         _assert(latest is not None, "episode score was not persisted")
 
         replayer = EpisodeReplayer(store)
         replay = replayer.replay(episode.episode_id, dry_run=True)
-        _assert(replay.event_count == 1, "dry-run replay should see one input event")
-        _assert("keyboard" in replay.summary[0], "dry-run replay summary missing keyboard event")
+        _assert(replay.event_count == 3, "dry-run replay should see recorded input events")
+        _assert(any("keyboard" in line for line in replay.summary), "dry-run replay summary missing keyboard event")
 
         export_path = store.export_episode_jsonl(episode.episode_id, root / "exported.jsonl")
         exported = export_path.read_text(encoding="utf-8")
         _assert("episode_started" in exported, "episode JSONL missing start record")
         _assert("input_event" in exported, "episode JSONL missing input event")
+        _assert("ui_primitive" in exported, "episode JSONL missing ui primitive")
         _assert("human_feedback" in exported, "episode JSONL missing human feedback")
         _assert('"key_text": ""' in exported, "raw key text should be empty by default")
 

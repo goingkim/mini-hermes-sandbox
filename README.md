@@ -53,11 +53,31 @@ Screen + mouse/keyboard event hooks:
 .\.venv\Scripts\python.exe -m mini_hermes episode-record "작업 설명" --duration 10 --fps 1
 ```
 
+UI primitive learning episode:
+
+```powershell
+.\.venv\Scripts\python.exe -m mini_hermes episode-record "이메일 작성 버튼을 누르고 제목을 입력한다" --duration 10 --fps 2 --skill send-email --expected-primitive click --expected-primitive type_text --expected-primitive verify_state
+.\.venv\Scripts\python.exe -m mini_hermes episode-build-primitives <episode_id>
+.\.venv\Scripts\python.exe -m mini_hermes episode-score <episode_id>
+.\.venv\Scripts\python.exe -m mini_hermes episode-export-primitives <episode_id> --output agent_runs\primitive_samples.jsonl
+```
+
+이 흐름은 raw screen/input trace 위에 다음 학습 단위를 추가합니다.
+
+- `move_mouse`: pointer 이동
+- `click`: UI target 클릭
+- `scroll`: viewport/control 스크롤
+- `type_text`: focused control에 텍스트 입력, 기본값은 원문 미저장
+- `press_key`: Enter, Tab, Escape, Backspace 같은 비텍스트 키
+- `verify_state`: 마지막 화면 상태 확인
+
 Inspect, score, replay dry-run, export:
 
 ```powershell
 .\.venv\Scripts\python.exe -m mini_hermes episode-list --limit 5
+.\.venv\Scripts\python.exe -m mini_hermes episode-build-primitives <episode_id>
 .\.venv\Scripts\python.exe -m mini_hermes episode-score <episode_id>
+.\.venv\Scripts\python.exe -m mini_hermes episode-export-primitives <episode_id> --output agent_runs\primitive_samples.jsonl
 .\.venv\Scripts\python.exe -m mini_hermes episode-replay <episode_id>
 .\.venv\Scripts\python.exe -m mini_hermes episode-feedback <episode_id> 0.8 "작업 품질 양호"
 .\.venv\Scripts\python.exe -m mini_hermes episode-export <episode_id> --output agent_runs\episode.jsonl
@@ -74,6 +94,8 @@ Episode data is stored under `agent_runs/mini_hermes/episodes/`:
 - `episodes.db`: SQLite metadata and event tables
 - `<episode_id>/episode.jsonl`: append-only JSONL trace
 - `<episode_id>/frames/*.png`: captured screen frames
+
+`episode-export-primitives`는 primitive별 학습 JSONL을 만듭니다. 각 sample은 `task`, `primitive`, `frame_path`, `target`, `value`, `input_event_ids`, `reward`를 포함하므로 skill 문서의 절차를 실제 화면 frame/action/reward와 연결하는 데 사용할 수 있습니다.
 
 ## Telegram Bridge
 

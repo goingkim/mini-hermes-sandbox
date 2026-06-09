@@ -163,6 +163,8 @@ hermes-run
 episode-record
 episode-list
 episode-score
+episode-build-primitives
+episode-export-primitives
 episode-feedback
 episode-replay
 episode-export
@@ -411,6 +413,8 @@ Windows 화면 캡처
 timestamp 기반 episode 저장
 JSONL/SQLite 동시 저장
 replay
+UI primitive label 생성
+primitive training JSONL export
 rule-based scoring
 human feedback 기록
 ```
@@ -421,7 +425,7 @@ human feedback 기록
 No neural network
 No imitation learning
 No RL
-Only recorder/schema/storage/replay/rule-based scoring
+Only recorder/schema/storage/primitive builder/replay/rule-based scoring
 ```
 
 ## Episode 기록 흐름
@@ -453,6 +457,29 @@ EpisodeRecorder.record()
 episode_id 반환
 ```
 
+## UI primitive 데이터 구축 흐름
+
+```text
+episode-build-primitives <episode_id>
+  |
+  v
+UIPrimitiveBuilder.build()
+  |
+  +--> input_events를 시간순으로 읽음
+  +--> mouse move/down/up/wheel을 move_mouse/click/scroll로 묶음
+  +--> keyboard key_down을 type_text/press_key로 묶음
+  +--> 마지막 frame을 verify_state primitive로 연결
+  +--> ui_primitives table + episode.jsonl에 저장
+  |
+  v
+episode-export-primitives <episode_id>
+  |
+  v
+primitive별 training sample JSONL 생성
+```
+
+핵심 목적은 큰 task 전체를 한 번에 학습시키는 것이 아니라, `click`, `type_text`, `scroll`, `verify_state` 같은 UI 원자 기술을 화면 frame, 입력 event, reward와 연결하는 것이다.
+
 저장 위치:
 
 ```text
@@ -477,6 +504,7 @@ episode 데이터 구조를 정의한다.
 Episode
 ScreenFrame
 InputEvent
+UIPrimitiveRecord
 AgentPlan
 ToolCallRecord
 ObservationRecord
@@ -506,6 +534,7 @@ SQLite 테이블:
 episodes
 frames
 input_events
+ui_primitives
 agent_plans
 tool_calls
 observations
@@ -514,6 +543,23 @@ human_feedback
 ```
 
 JSONL은 나중에 학습/분석 데이터로 쓰기 쉽게 append-only trace 형태로 남긴다.
+
+### `dataset/primitives.py`
+
+raw 입력 이벤트를 UI 원자 기술 label로 변환한다.
+
+현재 vocabulary:
+
+```text
+move_mouse
+click
+scroll
+type_text
+press_key
+verify_state
+```
+
+`episode-export-primitives`는 primitive별 sample을 JSONL로 내보낸다. 각 sample은 task, primitive, frame_path, target, value, input_event_ids, reward를 포함한다.
 
 ### `dataset/screen.py`
 
@@ -593,6 +639,7 @@ episode를 rule-based로 점수화한다.
 - episode status
 - frame 수
 - input event 수
+- UI primitive 수
 - tool call 수
 - tool error 수
 - recorder error 수
@@ -766,6 +813,12 @@ episode-list
 
 episode-score
   -> RuleBasedEpisodeScorer.score()
+
+episode-build-primitives
+  -> UIPrimitiveBuilder.build()
+
+episode-export-primitives
+  -> UIPrimitiveBuilder.export_training_jsonl()
 
 episode-feedback
   -> EpisodeStore.add_human_feedback()

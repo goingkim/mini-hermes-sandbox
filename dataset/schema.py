@@ -54,6 +54,22 @@ class InputEvent:
 
 
 @dataclass(frozen=True)
+class UIPrimitiveRecord:
+    primitive_id: str
+    episode_id: str
+    timestamp: float
+    index: int
+    name: str
+    start_timestamp: float
+    end_timestamp: float
+    frame_id: str = ""
+    input_event_ids: list[str] = field(default_factory=list)
+    target: dict[str, Any] = field(default_factory=dict)
+    value: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class AgentPlan:
     plan_id: str
     episode_id: str
